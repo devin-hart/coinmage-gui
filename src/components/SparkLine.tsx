@@ -1,20 +1,12 @@
-import React from "react";
-
 type Props = {
   data: number[];
   className?: string;
-  /** Show axes + ticks (you can hide on mobile with CSS) */
   showAxis?: boolean;
-  /** Outer padding inside the SVG (for labels) */
   padding?: { top?: number; right?: number; bottom?: number; left?: number };
-  /** Number of x and y ticks to draw (inclusive of min/max) */
   xTicks?: number;
   yTicks?: number;
-  /** Format the tick labels (defaults to a compact $ formatter) */
   format?: (n: number) => string;
-  /** Stroke width of the line */
   strokeWidth?: number;
-  /** Fill the area under the line */
   fillArea?: boolean;
 };
 
@@ -38,8 +30,8 @@ export default function Sparkline({
 }: Props) {
   if (!data || data.length < 2) return null;
 
-  const W = 240; // logical width (scales with viewBox)
-  const H = 64;  // logical height
+  const W = 240;
+  const H = 64;
   const padTop = padding.top ?? 6;
   const padRight = padding.right ?? 8;
   const padBottom = padding.bottom ?? 14;
@@ -55,7 +47,6 @@ export default function Sparkline({
   const x = (i: number) => padLeft + (i / (data.length - 1)) * innerW;
   const y = (v: number) => padTop + innerH - ((v - min) / domain) * innerH;
 
-  // line + (optional) area
   const points = data.map((v, i) => `${x(i)},${y(v)}`).join(" ");
   const areaPoints = `${padLeft},${padTop + innerH} ${points} ${padLeft + innerW},${padTop + innerH}`;
 
