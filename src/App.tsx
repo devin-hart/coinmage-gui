@@ -63,7 +63,7 @@ export default function App() {
               <img
                 src={wizardIcon}
                 alt="CoinMage Wizard"
-                className="h-10 w-auto"
+                className="h-25 w-auto"
               />
               CoinMage
             </h1>
