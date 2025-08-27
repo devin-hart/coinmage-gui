@@ -41,7 +41,6 @@ function normalizeCoin(c: MarketsItem): CardItem {
       pct(c.price_change_percentage_24h, "24h"),
       pct(c.price_change_percentage_7d_in_currency, "7d"),
     ].filter(Boolean).join(" | "),
-    change24hPct: c.price_change_percentage_24h,
     high24h: c.high_24h,
     low24h: c.low_24h,
     marketCap: c.market_cap,
