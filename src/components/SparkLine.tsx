@@ -5,11 +5,12 @@ type Props = {
   padding?: { top?: number; right?: number; bottom?: number; left?: number };
   xTicks?: number;
   yTicks?: number;
-  format?: (n: number) => string;
+  format?: (n: number) => string; // optional custom formatter
   strokeWidth?: number;
   fillArea?: boolean;
 };
 
+// Fallback, used only if nothing else is provided
 const defaultFmt = (n: number) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -24,37 +25,94 @@ export default function Sparkline({
   padding = { top: 6, right: 8, bottom: 14, left: 46 },
   xTicks = 4,
   yTicks = 3,
-  format = defaultFmt,
+  format, // allow undefined; we compute a good default below
   strokeWidth = 2,
   fillArea = false,
 }: Props) {
   if (!data || data.length < 2) return null;
 
+  // Overall SVG size
   const W = 240;
   const H = 64;
-  const padTop = padding.top ?? 6;
-  const padRight = padding.right ?? 8;
-  const padBottom = padding.bottom ?? 14;
-  const padLeft = padding.left ?? 46;
 
-  const innerW = W - padLeft - padRight;
-  const innerH = H - padTop - padBottom;
+  // Base padding from props
+  const basePadTop = padding.top ?? 6;
+  const basePadRight = padding.right ?? 8;
+  const basePadBottom = padding.bottom ?? 14;
+  const basePadLeft = padding.left ?? 46;
 
+  // Series stats
   const min = Math.min(...data);
   const max = Math.max(...data);
   const domain = max - min || 1;
 
+  // Ticks first so we can measure labels
+  const safeYTicks = Math.max(2, yTicks);
+  const yTickVals = Array.from({ length: safeYTicks }, (_, i) =>
+    min + (i * domain) / (safeYTicks - 1)
+  );
+
+  // Domain-aware decimals so micro prices show correctly
+  const tickStep = domain / (safeYTicks - 1);
+  const decimalsByStep = Math.min(
+    10,
+    Math.max(2, Math.ceil(-Math.log10(Math.max(tickStep, Number.EPSILON))) + 1)
+  );
+
+  const autoUsd = (n: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: decimalsByStep,
+      maximumFractionDigits: decimalsByStep,
+    }).format(n);
+
+  // Use caller's formatter if provided, otherwise our domain-aware one
+  const labelFormat = format ?? autoUsd ?? defaultFmt;
+
+  // Ensure axis labels are padded to at least `decimalsByStep` decimals
+  const padToDecimals = (s: string, minDec: number) => {
+    if (minDec <= 0) return s;
+    const dot = s.lastIndexOf(".");
+    if (dot === -1) return `${s}.${"0".repeat(minDec)}`;
+    const current = s.length - dot - 1;
+    return current >= minDec ? s : s + "0".repeat(minDec - current);
+  };
+  const axisFormat = (v: number) => padToDecimals(labelFormat(v), decimalsByStep);
+
+  // Estimate label width and expand left padding if needed
+  const labelFontPx = 10;
+  const approxCharWidth = labelFontPx * 0.62;
+  const longestLabelChars = showAxis
+    ? Math.max(...yTickVals.map((v) => axisFormat(v).length))
+    : 0;
+
+  const neededPadLeft = showAxis
+    ? Math.ceil(longestLabelChars * approxCharWidth) + 8
+    : 0;
+
+  // Final paddings
+  const padTop = basePadTop;
+  const padRight = basePadRight;
+  const padBottom = basePadBottom;
+  const padLeft = Math.max(basePadLeft, neededPadLeft);
+
+  // Inner plot area
+  const innerW = W - padLeft - padRight;
+  const innerH = H - padTop - padBottom;
+
+  // Scales
   const x = (i: number) => padLeft + (i / (data.length - 1)) * innerW;
   const y = (v: number) => padTop + innerH - ((v - min) / domain) * innerH;
 
+  // Path points
   const points = data.map((v, i) => `${x(i)},${y(v)}`).join(" ");
-  const areaPoints = `${padLeft},${padTop + innerH} ${points} ${padLeft + innerW},${padTop + innerH}`;
+  const areaPoints = `${padLeft},${padTop + innerH} ${points} ${
+    padLeft + innerW
+  },${padTop + innerH}`;
 
-  // ticks
-  const yTickVals = Array.from({ length: yTicks }, (_, i) =>
-    min + (i * domain) / Math.max(1, yTicks - 1)
-  );
-  const xTickIdxs = Array.from({ length: xTicks }, (_, i) =>
+  // x ticks (index positions)
+  const xTickIdxs = Array.from({ length: Math.max(2, xTicks) }, (_, i) =>
     Math.round((i * (data.length - 1)) / Math.max(1, xTicks - 1))
   );
 
@@ -67,7 +125,7 @@ export default function Sparkline({
     >
       {/* grid / axes */}
       {showAxis && (
-        <g className="text-gray-300">
+        <g className="text-gray-400">
           {/* y grid lines + labels */}
           {yTickVals.map((v, i) => (
             <g key={`y-${i}`}>
@@ -89,7 +147,7 @@ export default function Sparkline({
                 fill="currentColor"
                 className="select-none"
               >
-                {format(v)}
+                {axisFormat(v)}
               </text>
             </g>
           ))}
@@ -131,13 +189,7 @@ export default function Sparkline({
       )}
 
       {/* area (optional) */}
-      {fillArea && (
-        <polyline
-          points={areaPoints}
-          fill="currentColor"
-          opacity={0.08}
-        />
-      )}
+      {fillArea && <polyline points={areaPoints} fill="currentColor" opacity={0.08} />}
 
       {/* line */}
       <polyline
